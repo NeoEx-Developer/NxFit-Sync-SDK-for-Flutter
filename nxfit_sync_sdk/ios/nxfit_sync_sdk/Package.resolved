@@ -1,0 +1,23 @@
+{
+  "pins" : [
+    {
+      "identity" : "nxfit-sdk-for-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/NeoEx-Developer/NxFit-SDK-for-iOS",
+      "state" : {
+        "revision" : "4df1c15b9ed5e91732bdc13500c64171c95fd4f6",
+        "version" : "0.0.2"
+      }
+    },
+    {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log.git",
+      "state" : {
+        "revision" : "3d8596ed08bd13520157f0355e35caed215ffbfa",
+        "version" : "1.6.3"
+      }
+    }
+  ],
+  "version" : 2
+}
