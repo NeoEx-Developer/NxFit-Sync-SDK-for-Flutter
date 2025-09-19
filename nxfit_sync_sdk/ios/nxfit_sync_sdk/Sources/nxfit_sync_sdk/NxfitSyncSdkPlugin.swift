@@ -6,18 +6,26 @@ import NXFitSync
 import Combine
 import Logging
 
-public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin {
+public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     private let logger: Logger
     private let messageChannel: FlutterBasicMessageChannel
+    private var readyEventSink: FlutterEventSink?
     private let authProvider: AuthProviding
     private var configProvider: ConfigurationProviding?
     private var syncSdk: NXFitSync?
     private var authStatusSubscription: AnyCancellable? = nil
+    private let appleIntegrationIdentifier = "apple"
+    private let flutterResultCodeError = "ERROR"
+    private let flutterResultCodeInvalidArgument = "INVALID_ARGUMENT"
+    private let flutterResultCodeUnsupportedIntegration = "UNSUPPORTED_INTEGRATION"
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(name: "com.neoex.sdk", binaryMessenger: registrar.messenger())
         let instance = NxfitSyncSdkPlugin(with: registrar)
         registrar.addMethodCallDelegate(instance, channel: channel)
+        
+        let eventChannel = FlutterEventChannel(name: "com.neoex.sdk/readyState", binaryMessenger: registrar.messenger())
+        eventChannel.setStreamHandler(instance)
     }
 
     public init(with registrar: FlutterPluginRegistrar) {
@@ -28,48 +36,7 @@ public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin {
         self.authProvider = AuthProviderImpl(self.messageChannel)
         
         super.init();
-    }
-
-    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        self.logger.debug("handling: \(call.method)")
         
-        switch call.method {
-            case "configure":
-                guard let args = call.arguments as? [String: Any] else {
-                    result(FlutterError(code: "InvalidArguments", message: "Invalid arguments.", details: nil))
-                    return
-                }
-
-                self.handleConfigure(args, result)
-
-            case "connect":
-                self.handleConnect(result)
-
-            case "disconnect":
-                self.handleDisconnect(result)
-
-            case "isConnected":
-                self.handleIsConnected(result)
-
-            case "purgeCache":
-                self.handlePurgeCache(result)
-
-            case "sync":
-                self.handleSync(result)
-
-            default:
-                result(FlutterMethodNotImplemented)
-        }
-    }
-
-    private func handleConfigure(_ args: [String: Any], _ result: @escaping FlutterResult) {
-        guard let url = args["baseUrl"] as? String, let parsedUrl = URL(string: url) else {
-            result(FlutterError(code: "InvalidArguments", message: "Invalid baseUrl argument.", details: nil))
-            return
-        }
-
-        self.configProvider = ConfigProviderImpl(baseUrl: parsedUrl)
-
         self.authStatusSubscription = self.authProvider.authState
             .receive(on: RunLoop.main)
             .sink { [weak self] (state) in
@@ -77,19 +44,91 @@ public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin {
                     return
                 }
                 
+                self.logger.debug("auth state \(state.value)")
+                
                 if case let AuthState.authenticated(_) = state, let configProvider = self.configProvider {
-                    self.syncSdk = NXFitSyncFactory.build(configProvider, self.authProvider)
+                    if self.syncSdk == nil {
+                        self.syncSdk = NXFitSyncFactory.build(configProvider, self.authProvider)
+                        self.readyEventSink?(true)
+                    }
+                }
+                else {
+                    self.syncSdk = nil
+                    self.readyEventSink?(false)
                 }
             }
+    }
+    
+    public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        self.logger.debug("plugin onListen fired")
+        self.readyEventSink = events
+        
+        return nil
+    }
+    
+    public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        self.logger.debug("plugin onCancel fired")
+        
+        self.readyEventSink = nil
+        return nil
+    }
+
+    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        self.logger.debug("handling: \(call.method)")
+        
+        do {
+            switch call.method {
+            case "configure":
+                try self.handleConfigure(call.arguments, result)
+                
+            case "connect":
+                try self.handleConnect(call.arguments, result)
+                
+            case "disconnect":
+                try self.handleDisconnect(call.arguments, result)
+                
+            case "getIntegrations":
+                try self.handleGetIntegrations(result)
+                
+            case "purgeCache":
+                try self.handlePurgeCache(result)
+                
+            case "syncExerciseSessions":
+                try self.handleSyncExerciseSessions(result)
+                
+            case "syncDailyMetrics":
+                try self.handleSyncHealth(result)
+                
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
+        catch PluginError.invalidArgument(let expectedArgument) {
+            result(FlutterError(code: flutterResultCodeInvalidArgument, message: "Invalid argument provided for '\(expectedArgument)'.", details: nil))
+        }
+        catch PluginError.sdkNotBuilt {
+            result(FlutterError(code: flutterResultCodeError, message: "Invalid state, SDK not built.", details: nil))
+        }
+        catch PluginError.unsupportedIntegration(let identifier) {
+            result(FlutterError(code: flutterResultCodeUnsupportedIntegration, message: "'\(identifier)' is not supported. Only '\(appleIntegrationIdentifier)' integration is supported.", details: nil))
+        }
+        catch {
+            result(FlutterError(code: flutterResultCodeError, message: error.localizedDescription, details: nil))
+        }
+    }
+
+    private func handleConfigure(_ args: Any?, _ result: @escaping FlutterResult) throws {
+        let parsedUrl = try assertArgumentValid(args, expectedArgument: "baseUrl", get: { (s) in URL(string: s)! })
+
+        self.configProvider = ConfigProviderImpl(baseUrl: parsedUrl)
 
         result(nil)
     }
 
-    private func handleConnect(_ result: @escaping FlutterResult) {
-        guard let syncSdk = self.syncSdk else {
-            result(FlutterError(code: "InvalidState", message: "Invalid state, SDK not built.", details: nil))
-            return
-        }
+    private func handleConnect(_ args: Any?, _ result: @escaping FlutterResult) throws {
+        let identifier = try assertArgumentValid(args, expectedArgument: "integrationIdentifier", get: { (s) in s as! String })
+        try assertIdentifierSupported(identifier)
+        try assertSdkBuilt()
 
         Task {
             await self.syncSdk?.connect()
@@ -98,11 +137,10 @@ public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin {
         }
     }
 
-    private func handleDisconnect(_ result: @escaping FlutterResult) {
-        guard let syncSdk = self.syncSdk else {
-            result(FlutterError(code: "InvalidState", message: "Invalid state, SDK not built.", details: nil))
-            return
-        }
+    private func handleDisconnect(_ args: Any?, _ result: @escaping FlutterResult) throws {
+        let identifier = try assertArgumentValid(args, expectedArgument: "integrationIdentifier", get: { (s) in s as! String })
+        try assertIdentifierSupported(identifier)
+        try assertSdkBuilt()
 
         Task {
             await self.syncSdk?.disconnect()
@@ -111,20 +149,27 @@ public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    private func handleIsConnected(_ result: @escaping FlutterResult) {
-        guard let syncSdk = self.syncSdk else {
-            result(FlutterError(code: "InvalidState", message: "Invalid state, SDK not built.", details: nil))
-            return
-        }
+    private func handleGetIntegrations(_ result: @escaping FlutterResult) throws {
+        try assertSdkBuilt()
 
-        result(self.syncSdk?.isConnected() ?? false)
+        let connected = self.syncSdk?.isConnected() ?? false
+        
+        do {
+            let jsonData = try JSONEncoder().encode(
+                LocalIntegrationList(integrations: [
+                    LocalIntegration(identifier: appleIntegrationIdentifier, isConnected: connected, availability: .available)
+                ])
+            )
+
+            result(String(data: jsonData, encoding: .utf8)!)
+        }
+        catch {
+            result(FlutterError(code: flutterResultCodeError, message: "Unable to encode JSON.", details: nil))
+        }
     }
 
-    private func handlePurgeCache(_ result: @escaping FlutterResult) {
-        guard let syncSdk = self.syncSdk else {
-            result(FlutterError(code: "InvalidState", message: "Invalid state, SDK not built.", details: nil))
-            return
-        }
+    private func handlePurgeCache(_ result: @escaping FlutterResult) throws {
+        try assertSdkBuilt()
 
         Task {
             do {
@@ -133,21 +178,52 @@ public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin {
                 result(nil)
             }
             catch {
-                result(FlutterError(code: "InvalidOperation", message: "Failed to purge cache", details: nil))
+                result(FlutterError(code: flutterResultCodeError, message: "Failed to purge cache", details: nil))
             }
         }
     }
 
-    private func handleSync(_ result: @escaping FlutterResult) {
-       guard let syncSdk = self.syncSdk else {
-            result(FlutterError(code: "InvalidState", message: "Invalid state, SDK not built.", details: nil))
-            return
-        }
+    private func handleSyncExerciseSessions(_ result: @escaping FlutterResult) throws {
+        try assertSdkBuilt()
 
         Task {
-            await self.syncSdk?.sync()
+            await self.syncSdk?.syncWorkouts()
 
             result(nil)
         }
     }
+    
+    private func handleSyncHealth(_ result: @escaping FlutterResult) throws {
+        try assertSdkBuilt()
+
+        Task {
+            await self.syncSdk?.syncHealth()
+
+            result(nil)
+        }
+    }
+    
+    private func assertArgumentValid<T>(_ arguments: Any?, expectedArgument: String, get: (String) throws -> T) throws -> T  {
+        guard let args = arguments as? [String: Any], let arg = args[expectedArgument] as? String, let parsedArg = try? get(arg) else {
+            throw PluginError.invalidArgument(expectedArgument)
+        }
+        
+        return parsedArg
+    }
+    
+    private func assertIdentifierSupported(_ identifier: String) throws {
+        guard identifier == appleIntegrationIdentifier else {
+            throw PluginError.unsupportedIntegration(identifier)
+        }
+    }
+    
+    private func assertSdkBuilt() throws {
+        if self.syncSdk == nil {
+            throw PluginError.sdkNotBuilt
+        }
+    }
+}
+
+fileprivate enum PluginError : Error {
+    case sdkNotBuilt, invalidArgument(_ argument: String), unsupportedIntegration(_ identifier: String)
 }

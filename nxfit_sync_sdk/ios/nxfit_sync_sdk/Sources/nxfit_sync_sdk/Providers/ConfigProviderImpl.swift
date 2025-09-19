@@ -1,7 +1,7 @@
 import Flutter
 import NXFitConfig
 
-class ConfigProviderImpl : ConfigurationProviding {
+internal class ConfigProviderImpl : ConfigurationProviding {
     private let config: Configuration
 
     init(baseUrl: URL) {

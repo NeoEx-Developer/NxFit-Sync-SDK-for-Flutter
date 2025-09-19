@@ -1,3 +1,6 @@
+import 'package:nxfit_sdk/clients.dart';
+import 'package:nxfit_sdk/models.dart';
+
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'nxfit_sync_sdk_impl.dart';
 import 'package:nxfit_sdk/core.dart';
@@ -23,10 +26,12 @@ abstract class NxfitSyncSdkPlatform extends PlatformInterface {
     _instance = instance;
   }
 
+  Stream<bool> get isReady;
   Future<void> init(AuthProvider authProvider, ConfigurationProvider configProvider);
-  Future<void> connect();
-  Future<void> disconnect();
-  Future<bool> isConnected();
+  Future<void> connect(String integrationIdentifier);
+  Future<void> disconnect(String integrationIdentifier);
+  Future<List<LocalIntegration>> getIntegrations();
   Future<void> purgeCache();
-  Future<void> sync();
+  Future<void> syncExerciseSessions();
+  Future<void> syncDailyMetrics();
 }

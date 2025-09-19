@@ -3,7 +3,7 @@ import Combine
 import NXFitAuth
 import Logging
 
-class AuthProviderImpl : AuthProviding {
+internal class AuthProviderImpl : AuthProviding {
     private let logger: Logger
     private let messageChannel: FlutterBasicMessageChannel
     private var _userId: Int = 0
@@ -39,6 +39,16 @@ class AuthProviderImpl : AuthProviding {
     }
 
     public var authState: AnyPublisher<AuthState, Never> {
-        return _authState.eraseToAnyPublisher()
+        return _authState.removeDuplicates().eraseToAnyPublisher()
+    }
+}
+
+extension AuthState : Equatable {
+    public static func == (lhs: AuthState, rhs: AuthState) -> Bool {
+        return lhs.value == rhs.value
+    }
+    
+    internal var value: String {
+        return String(describing: self)
     }
 }

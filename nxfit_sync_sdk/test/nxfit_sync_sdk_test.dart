@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nxfit_sdk/clients.dart';
+import 'package:nxfit_sdk/models.dart';
 import 'package:nxfit_sync_sdk/nxfit_sync_sdk.dart';
 import 'package:nxfit_sync_sdk/nxfit_sync_sdk_platform_interface.dart';
 import 'package:nxfit_sync_sdk/nxfit_sync_sdk_impl.dart';
@@ -15,14 +17,19 @@ class MockNxfitSyncSdkPlatform
   bool _connectCalled = false;
   bool _disconnectCalled = false;
   bool _purgeCacheCalled = false;
-  bool _syncCalled = false;
+  bool _syncExerciseSessionsCalled = false;
+  bool _syncDailyMetricsCalled = false;
+  bool _getIntegrationsCalled = false;
 
   // Getters to verify method calls in tests
   bool get initCalled => _initCalled;
   bool get connectCalled => _connectCalled;
   bool get disconnectCalled => _disconnectCalled;
   bool get purgeCacheCalled => _purgeCacheCalled;
-  bool get syncCalled => _syncCalled;
+  bool get syncExerciseSessionsCalled => _syncExerciseSessionsCalled;
+  bool get syncDailyMetricsCalled => _syncDailyMetricsCalled;
+  bool get getIntegrationsCalled => _getIntegrationsCalled;
+
 
   @override
   Future<void> init(AuthProvider authProvider, ConfigurationProvider configProvider) async {
@@ -30,20 +37,15 @@ class MockNxfitSyncSdkPlatform
   }
 
   @override
-  Future<void> connect() async {
+  Future<void> connect(String integrationIdentifier) async {
     _connectCalled = true;
     _isConnected = true;
   }
 
   @override
-  Future<void> disconnect() async {
+  Future<void> disconnect(String integrationIdentifier) async {
     _disconnectCalled = true;
     _isConnected = false;
-  }
-
-  @override
-  Future<bool> isConnected() async {
-    return _isConnected;
   }
 
   @override
@@ -52,9 +54,24 @@ class MockNxfitSyncSdkPlatform
   }
 
   @override
-  Future<void> sync() async {
-    _syncCalled = true;
+  Future<void> syncExerciseSessions() async {
+    _syncExerciseSessionsCalled = true;
   }
+
+  @override
+  Future<void> syncDailyMetrics() async {
+    _syncDailyMetricsCalled = true;
+  }
+
+  @override
+  Future<List<LocalIntegration>> getIntegrations() async {
+    _getIntegrationsCalled = true;
+
+    return [LocalIntegration('health_connect', _isConnected, IntegrationAvailability.available)];
+  }
+
+  @override
+  Stream<bool> get isReady => Stream.value(true);
 
   // Helper methods for testing
   void reset() {
@@ -63,7 +80,6 @@ class MockNxfitSyncSdkPlatform
     _connectCalled = false;
     _disconnectCalled = false;
     _purgeCacheCalled = false;
-    _syncCalled = false;
   }
 }
 
@@ -142,29 +158,22 @@ void main() {
     });
 
     test('connect should call platform connect method', () async {
-      await nxfitSyncSdk.connect();
+      final integrationId = "health_connect";
+
+      await nxfitSyncSdk.connect(integrationId);
       expect(mockPlatform.connectCalled, isTrue);
     });
 
     test('disconnect should call platform disconnect method', () async {
-      await nxfitSyncSdk.disconnect();
+      final integrationId = "health_connect";
+
+      await nxfitSyncSdk.disconnect(integrationId);
       expect(mockPlatform.disconnectCalled, isTrue);
     });
 
-    test('isConnected should return platform connection status', () async {
-      // Initially not connected
-      bool connected = await nxfitSyncSdk.isConnected();
-      expect(connected, isFalse);
-
-      // Connect and check again
-      await nxfitSyncSdk.connect();
-      connected = await nxfitSyncSdk.isConnected();
-      expect(connected, isTrue);
-
-      // Disconnect and check again
-      await nxfitSyncSdk.disconnect();
-      connected = await nxfitSyncSdk.isConnected();
-      expect(connected, isFalse);
+    test('getIntegrations should call platform getIntegrations method', () async {
+      await nxfitSyncSdk.getIntegrations();
+      expect(mockPlatform.getIntegrationsCalled, isTrue);
     });
 
     test('purgeCache should call platform purgeCache method', () async {
@@ -172,29 +181,42 @@ void main() {
       expect(mockPlatform.purgeCacheCalled, isTrue);
     });
 
-    test('sync should call platform sync method', () async {
-      await nxfitSyncSdk.sync();
-      expect(mockPlatform.syncCalled, isTrue);
+    test('syncExerciseSessions should call platform sync method', () async {
+      await nxfitSyncSdk.syncExerciseSessions();
+      expect(mockPlatform.syncExerciseSessionsCalled, isTrue);
     });
 
+    test('syncDailyMetrics should call platform sync method', () async {
+      await nxfitSyncSdk.syncDailyMetrics();
+      expect(mockPlatform.syncDailyMetricsCalled, isTrue);
+    });
+
+
     test('multiple operations should work in sequence', () async {
+      final integrationId = "health_connect";
+
       // Connect
-      await nxfitSyncSdk.connect();
+      await nxfitSyncSdk.connect(integrationId);
       expect(mockPlatform.connectCalled, isTrue);
-      expect(await nxfitSyncSdk.isConnected(), isTrue);
+      var integrations = await nxfitSyncSdk.getIntegrations();
+      expect(integrations.singleWhere((i) => i.identifier == integrationId).isConnected, isTrue);
 
       // Sync
-      await nxfitSyncSdk.sync();
-      expect(mockPlatform.syncCalled, isTrue);
+      await nxfitSyncSdk.syncExerciseSessions();
+      await nxfitSyncSdk.syncDailyMetrics();
+
+      expect(mockPlatform.syncExerciseSessionsCalled, isTrue);
+      expect(mockPlatform.syncDailyMetricsCalled, isTrue);
 
       // Purge cache
       await nxfitSyncSdk.purgeCache();
       expect(mockPlatform.purgeCacheCalled, isTrue);
 
       // Disconnect
-      await nxfitSyncSdk.disconnect();
+      await nxfitSyncSdk.disconnect(integrationId);
       expect(mockPlatform.disconnectCalled, isTrue);
-      expect(await nxfitSyncSdk.isConnected(), isFalse);
+      integrations = await nxfitSyncSdk.getIntegrations();
+      expect(integrations.singleWhere((i) => i.identifier == integrationId).isConnected, isFalse);
     });
 
     test('should handle multiple SDK instances', () async {
@@ -223,13 +245,15 @@ void main() {
     });
 
     test('should handle connect errors gracefully', () async {
+      final integrationId = "health_connect";
+
       // Use a platform that only throws on connect, not init
       final connectErrorPlatform = _ConnectErrorPlatform();
       NxfitSyncSdkPlatform.instance = connectErrorPlatform;
       nxfitSyncSdk = await NxfitSyncSdk.build(mockConfigProvider, mockAuthProvider);
 
       expect(
-        () => nxfitSyncSdk.connect(),
+        () => nxfitSyncSdk.connect(integrationId),
         throwsA(isA<Exception>()),
       );
     });
@@ -241,7 +265,7 @@ void main() {
       nxfitSyncSdk = await NxfitSyncSdk.build(mockConfigProvider, mockAuthProvider);
 
       expect(
-        () => nxfitSyncSdk.sync(),
+        () => nxfitSyncSdk.syncDailyMetrics(),
         throwsA(isA<Exception>()),
       );
     });
@@ -262,14 +286,14 @@ void main() {
 // Helper classes for error testing
 class _ConnectErrorPlatform extends MockNxfitSyncSdkPlatform {
   @override
-  Future<void> connect() async {
+  Future<void> connect(String integrationIdentifier) async {
     throw Exception('Connection failed');
   }
 }
 
 class _SyncErrorPlatform extends MockNxfitSyncSdkPlatform {
   @override
-  Future<void> sync() async {
+  Future<void> syncDailyMetrics() async {
     throw Exception('Sync failed');
   }
 }
