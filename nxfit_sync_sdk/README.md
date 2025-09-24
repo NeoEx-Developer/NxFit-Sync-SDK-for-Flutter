@@ -24,7 +24,7 @@ In your project's `pubspec.yaml` file
 # pubspec.yaml
 
 dependencies:
-  nxfit_sync_sdk: ^0.0.3
+  nxfit_sync_sdk: ^0.0.4
 ```
 
 ## Flutter setup
@@ -205,7 +205,8 @@ through system settings. On newer versions of Android, if a user denies permissi
 
 There is no need to declare the health Connect permissions in your app's manifest because they will be automatically merged at build time from the **NXFit Health Connect SDK**'s
 manifest (See: [com.neoex.nxfit-sdk-healthconnect](https://github.com/NeoEx-Developer/NXFit-SDK-for-Android/packages/2653461)). Also, a query will also be merged into your app's
-manifest to allow querying the state of Health Connect on the device. Here is what will be merged into your app's manifest:
+manifest to allow querying the state of Health Connect on the device. An additional query is added to allow looking up apps that have reported data to Health Connect based on
+their package ID. Here is what will be merged into your app's manifest:
 
 ``` xml
     // Merge'd from the NXFit Health Connect SDK's AndroidManifest.xml.
@@ -242,9 +243,17 @@ manifest to allow querying the state of Health Connect on the device. Here is wh
         <uses-permission android:name="android.permission.health.READ_WEIGHT" />
         <uses-permission android:name="android.permission.health.READ_WHEELCHAIR_PUSHES" />
         
-        <!-- Check if Health Connect is installed -->
         <queries>
+            <!-- Check if Health Connect is installed -->
             <package android:name="com.google.android.apps.healthdata" />
+    
+            <!-- Allows calls to PackageManager.getPackageInfo(). This is
+                 used to get the app name based on the package ID reported
+                 by Health Connect. -->
+            <intent>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent>
         </queries>
             
         .....

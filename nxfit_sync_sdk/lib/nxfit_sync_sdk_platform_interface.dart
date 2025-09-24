@@ -1,9 +1,8 @@
-import 'package:nxfit_sdk/clients.dart';
-import 'package:nxfit_sdk/models.dart';
-
-import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-import 'nxfit_sync_sdk_impl.dart';
 import 'package:nxfit_sdk/core.dart';
+import 'package:nxfit_sdk/models.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+
+import 'nxfit_sync_sdk_impl.dart';
 
 abstract class NxfitSyncSdkPlatform extends PlatformInterface {
   /// Constructs a NxfitSyncSdkPlatform.

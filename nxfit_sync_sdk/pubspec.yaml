@@ -1,9 +1,7 @@
 name: nxfit_sync_sdk
-version: 0.0.3
+version: 0.0.4
 description: >
-  NxFit Sync SDK for Flutter package provides seamless integration with NxFit's health data synchronization services.
-  This plugin bridges Flutter applications with native iOS and Android NxFit SDKs to sync health and fitness data from
-  device health stores (HealthKit on iOS and Health Connect on Android) to the NxFit platform.
+  Seamlessly sync health data from iOS HealthKit and Android Health Connect to the NxFit platform.
 homepage: https://www.neoex.io/
 repository: https://github.com/NeoEx-Developer/NxFit-Sync-SDK-for-Flutter
 
