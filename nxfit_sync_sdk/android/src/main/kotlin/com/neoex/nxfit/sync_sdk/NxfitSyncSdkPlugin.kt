@@ -324,7 +324,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
     private fun configure(baseUrl: String) {
         configProvider =  object : ConfigurationProvider {
             override val baseUrl: String = baseUrl
-            override val httpLoggerLevel: HttpLoggerLevel = HttpLoggerLevel.HEADERS
+            override val httpLoggerLevel: HttpLoggerLevel = HttpLoggerLevel.NONE
             override val readTimeoutSeconds: Long = 20
         }
     }
