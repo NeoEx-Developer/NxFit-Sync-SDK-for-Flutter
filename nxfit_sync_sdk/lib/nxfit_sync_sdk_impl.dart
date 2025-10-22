@@ -5,13 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:nxfit_sdk/models.dart';
 import 'package:nxfit_sync_sdk/nxfit/models/local_integration_list.dart';
 import 'package:rxdart/rxdart.dart';
-import 'nxfit_sync_sdk_platform_interface.dart';
+import 'nxfit_sync_sdk_platform.dart';
 import 'package:nxfit_sdk/core.dart';
-import 'package:logging/logging.dart';
+import 'package:nxfit_sdk/src/logging/nxfit_logger.dart';
 
 @internal
 class NxfitSyncSdkImpl extends NxfitSyncSdkPlatform {
-  final _logger = Logger('com.neoex.nxfit.sync.bridge');
   final _methodChannel = const MethodChannel('com.neoex.sdk');
   final _authMessageChannel = const BasicMessageChannel<Object?>(
     'com.neoex.sdk/authProvider',
@@ -31,7 +30,7 @@ class NxfitSyncSdkImpl extends NxfitSyncSdkPlatform {
 
     _subs.add(
       _provider.authState.listen((b) {
-        _logger.fine("received update auth state for user: ${b.userId}");
+        logger.fine("received update auth state for user: ${b.userId}");
 
         _authMessageChannel.send({
           "accessToken": b.accessToken,
@@ -43,19 +42,30 @@ class NxfitSyncSdkImpl extends NxfitSyncSdkPlatform {
     _subs.add(
       _readyStateChannel.receiveBroadcastStream().listen((event) {
         if (event is bool) {
-          _logger.fine("isReady state received from native: $event");
+          logger.fine("isReady state received from native: $event");
           _readyStateStream.value = event;
         }
         else {
-          _logger.warning("Unknown state received from native: $event");
+          logger.warning("Unknown state received from native: $event");
         }
       }, onError: (error) {
-        _logger.severe("Error receiving ready state from native: $error");
+        logger.severe("Error receiving ready state from native: $error");
       })
     );
 
+    await _configure(configProvider);
+  }
+
+  Future<void> _configure(ConfigurationProvider configProvider) async {
+    logger.config("baseUrl: ${configProvider.baseUrl}");
+    logger.config("httpLoggerLevel: ${configProvider.httpLoggerLevel.name}");
+    logger.config("minLogLevel: ${configProvider.minLogLevel.name}");
+    logger.config("NxfitSyncSdk: ${configProvider.connectTimeoutSeconds}");
+
     await _methodChannel.invokeMethod('configure', {
       "baseUrl": configProvider.baseUrl,
+      "httpLoggerLevel": configProvider.httpLoggerLevel.name,
+      "minLogLevel": configProvider.minLogLevel.name,
     });
   }
 

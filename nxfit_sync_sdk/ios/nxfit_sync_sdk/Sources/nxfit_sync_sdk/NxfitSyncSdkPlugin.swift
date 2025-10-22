@@ -119,8 +119,9 @@ public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
 
     private func handleConfigure(_ args: Any?, _ result: @escaping FlutterResult) throws {
         let parsedUrl = try assertArgumentValid(args, expectedArgument: "baseUrl", get: { (s) in URL(string: s)! })
+        let httpLogLevel = try assertArgumentValid(args, expectedArgument: "httpLoggerLevel", get: { (s) in try Self.httpLogLevel(from: s) })
 
-        self.configProvider = ConfigProviderImpl(baseUrl: parsedUrl)
+        self.configProvider = ConfigProviderImpl(baseUrl: parsedUrl, httpLogLevel: httpLogLevel)
 
         result(nil)
     }
@@ -220,6 +221,24 @@ public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     private func assertSdkBuilt() throws {
         if self.syncSdk == nil {
             throw PluginError.sdkNotBuilt
+        }
+    }
+    
+    // Converts a string to HttpLogLevel in a case-insensitive manner.
+    private static func httpLogLevel(from string: String) throws -> HttpLogLevel {
+        let normalized = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        switch normalized {
+            case "none":
+                return .none
+            case "errorsOnly":
+                return .errorsOnly
+            case "headers":
+                return .headers
+            case "body":
+                return .body
+            default:
+                return .none
         }
     }
 }

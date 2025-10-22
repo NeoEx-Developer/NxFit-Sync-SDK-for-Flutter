@@ -3,7 +3,6 @@ package com.neoex.nxfit.sync_sdk
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.core.app.ActivityCompat
 import androidx.health.connect.client.PermissionController
@@ -15,6 +14,9 @@ import com.neoex.nxfit.enums.HttpLoggerLevel
 import com.neoex.nxfit.healthconnect.HealthConnectState
 import com.neoex.nxfit.healthconnect.NXFitHealthConnect
 import com.neoex.nxfit.healthconnect.runIfAnyPermissionGranted
+import com.neoex.nxfit.logger.LogLevel
+import com.neoex.nxfit.logger.Logger
+import com.neoex.nxfit.logger.NxFitLogger
 import com.neoex.nxfit.sync_sdk.exceptions.InvalidIntegrationException
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -55,6 +57,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
     private val accessTokenFlow = MutableStateFlow<String?>(null)
     private var activity: Activity? = null
     private var readyStateSink: EventChannel.EventSink? = null
+    private val logger = NxFitLogger(TAG)
 
     private val fragmentActivity: FlutterFragmentActivity
         get() = activity as FlutterFragmentActivity
@@ -72,7 +75,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         methodChannel = MethodChannel(flutterPluginBinding.binaryMessenger, Channel.Method.id).apply {
             setMethodCallHandler { call, result ->
-                Log.d(TAG, "Received method call: ${call.method}")
+                logger.d("Received method call: ${call.method}")
 
                 try {
                     when (call.method) {
@@ -86,14 +89,18 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                                     )
                                 }
                                 catch (e: Exception) {
-                                    Log.e(TAG, "Error getting integrations", e)
+                                    logger.e("Error getting integrations", e)
                                     result.error(ERROR, e.message, e)
                                 }
                             }
                         }
 
                         Method.Configure.id -> {
-                            configure(call.argument("baseUrl")!!)
+                            configure(
+                                call.argument("baseUrl") ?: "",
+                                call.argument("httpLoggerLevel") ?: "none",
+                                call.argument("minLogLevel") ?: "warn",
+                            )
 
                             result.success("Configuration set successfully")
                         }
@@ -119,7 +126,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                                     result.success("Local cache purged successfully")
                                 }
                                 catch (e: Exception) {
-                                    Log.e(TAG, "Error purging local cache", e)
+                                    logger.e("Error purging local cache", e)
                                     result.error(ERROR, e.message, e)
                                 }
                             }
@@ -129,14 +136,14 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                             CoroutineScope(Dispatchers.IO).launch {
                                 try {
                                     nxfitHealthConnect?.runIfAnyPermissionGranted {
-                                        Log.d(TAG, "*** SyncExerciseSessions")
+                                        logger.d("*** SyncExerciseSessions")
                                         nxfitHealthConnect?.syncExerciseSessions()
                                     }
 
                                     result.success("Exercise sessions synced")
                                 }
                                 catch (e: Exception) {
-                                    Log.e(TAG, "Error syncing exercise sessions", e)
+                                    logger.e("Error syncing exercise sessions", e)
                                     result.error(ERROR, e.message, e)
                                 }
                             }
@@ -146,14 +153,14 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                             CoroutineScope(Dispatchers.IO).launch {
                                 try {
                                     nxfitHealthConnect?.runIfAnyPermissionGranted {
-                                        Log.d(TAG, "*** SyncDailyMetrics")
+                                        logger.d("*** SyncDailyMetrics")
                                         nxfitHealthConnect?.syncDailyRecords()
                                     }
 
                                     result.success("Daily metrics synced")
                                 }
                                 catch (e: Exception) {
-                                    Log.e(TAG, "Error syncing daily metrics", e)
+                                    logger.e("Error syncing daily metrics", e)
                                     result.error(ERROR, e.message, e)
                                 }
                             }
@@ -171,7 +178,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                     result.error(UNSUPPORTED_INTEGRATION, "${e.integrationIdentifier} is not supported. Only 'health_connect' integration is supported.", null)
                 }
                 catch (e: Exception) {
-                    Log.e(TAG, "Error handling method call", e)
+                    logger.e("Error handling method call", e)
                     result.error(ERROR, e.message, e)
                 }
             }
@@ -180,20 +187,20 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
         authChannel = BasicMessageChannel(flutterPluginBinding.binaryMessenger, Channel.Auth.id,StringCodec.INSTANCE).apply {
             setMessageHandler { message, replyChannel ->
                 message?.let { message ->
-                    Log.d(TAG, "Received message: $message")
+                    logger.v("Received message: $message")
 
                     val authMessage = Json.decodeFromString<AuthMessage>(message)
 
                     if (authMessage.userId == null) {
                         nxfit = null
-                        Log.d(TAG, "NXFit instance cleared due to null userId.")
+                        logger.d("NXFit instance cleared due to null userId.")
 
                         CoroutineScope(Dispatchers.Main).launch {
                             accessTokenFlow.emit(null)
                             readyStateSink?.success(false);
                         }
                     } else {
-                        Log.d(TAG, "User ID: ${authMessage.userId}, Access Token: ${authMessage.accessToken}")
+                        logger.d("User ID: ${authMessage.userId}, Access Token: ${authMessage.accessToken?.take(10) ?: "" }...")
 
                         CoroutineScope(Dispatchers.Main).launch {
                             accessTokenFlow.emit(authMessage.accessToken)
@@ -206,24 +213,24 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                                         userId = authMessage.userId,
                                         accessTokenFlow
                                     ).apply {
-                                        Log.d(TAG, "NXFit built successfully.")
+                                        logger.d("NXFit built successfully.")
 
                                         nxfitHealthConnect = NXFitHealthConnect.build(this).apply {
-                                            Log.d(TAG, "NXFitHealthConnect built successfully.")
+                                            logger.d("NXFitHealthConnect built successfully.")
 
                                             testHealthConnectAvailability(
-                                                { Log.i(TAG, "Health Connect is unsupported on this device.") },
-                                                { Log.i(TAG, "Health Connect is unavailable. User action may be required to install or update it.") },
-                                                { Log.i(TAG, "Health Connect is available.") }
+                                                { logger.i("Health Connect is unsupported on this device.") },
+                                                { logger.i("Health Connect is unavailable. User action may be required to install or update it.") },
+                                                { logger.i("Health Connect is available.") }
                                             )
 
                                             readyStateSink?.success(true);
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
                 }
 
                 replyChannel.reply(null)
@@ -233,12 +240,12 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
         readyStateChannel = EventChannel(flutterPluginBinding.binaryMessenger, Channel.Ready.id).apply {
             setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                    Log.d(TAG, "onListen called with arguments: $arguments")
+                    logger.d("onListen called with arguments: $arguments")
                     readyStateSink = events
     }
 
                 override fun onCancel(arguments: Any?) {
-                    Log.d(TAG, "onCancel called with arguments: $arguments")
+                    logger.d("onCancel called with arguments: $arguments")
                     readyStateSink = null
                 }
             })
@@ -253,7 +260,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
 
     private fun MethodCall.withArgument(name: String, block: (String) -> Unit) {
         argument<String>(name)?.let { value ->
-            if (value.isEmpty()) Log.w(TAG, "Argument '$name' is empty")
+            if (value.isEmpty()) logger.e("Argument '$name' must not be empty.")
 
             block(value)
         } ?: throw IllegalArgumentException("Argument '$name' is required")
@@ -266,7 +273,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
             val perms = NXFitHealthConnect.allRequiredPermissions.toTypedArray()
 
             perms.forEach { perm ->
-                Log.d(TAG, "Permission $perm is ${if (PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(activity, perm)) "granted" else "not granted"}")
+                logger.d("Permission $perm is ${if (PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(activity, perm)) "granted" else "not granted"}")
             }
 
             permissionRequestLauncher?.launch(NXFitHealthConnect.allRequiredPermissions)
@@ -321,11 +328,38 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
         onAttachedToActivity(binding)
     }
 
-    private fun configure(baseUrl: String) {
+    private fun configure(baseUrl: String, httpLoggerLevel: String, minLogLevel: String) {
+        if (baseUrl.isEmpty()) throw IllegalArgumentException("baseUrl is required")
+
+        Logger.minLogLevel = logLevelFromString(minLogLevel)
+
+        logger.i("Configuring with baseUrl: $baseUrl, httpLoggerLevel: $httpLoggerLevel, minLogLevel: $minLogLevel")
+
         configProvider =  object : ConfigurationProvider {
             override val baseUrl: String = baseUrl
-            override val httpLoggerLevel: HttpLoggerLevel = HttpLoggerLevel.NONE
+            override val httpLoggerLevel: HttpLoggerLevel = httpLoggerLevelFromString(httpLoggerLevel)
+            override val minLogLevel: LogLevel = Logger.minLogLevel
             override val readTimeoutSeconds: Long = 20
+        }
+    }
+
+    private fun logLevelFromString(level: String): LogLevel {
+        return when (level.lowercase()) {
+            "verbose" -> LogLevel.VERBOSE
+            "debug" -> LogLevel.DEBUG
+            "info" -> LogLevel.INFO
+            "warn" -> LogLevel.WARN
+            else -> LogLevel.WARN
+        }
+    }
+
+    private fun httpLoggerLevelFromString(level: String): HttpLoggerLevel {
+        return when (level.lowercase()) {
+            "none" -> HttpLoggerLevel.NONE
+            "basic" -> HttpLoggerLevel.BASIC
+            "headers" -> HttpLoggerLevel.HEADERS
+            "body" -> HttpLoggerLevel.BODY
+            else -> HttpLoggerLevel.NONE
         }
     }
 

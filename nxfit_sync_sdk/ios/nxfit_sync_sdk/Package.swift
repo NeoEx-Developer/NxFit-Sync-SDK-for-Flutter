@@ -12,7 +12,7 @@ let package = Package(
         .library(name: "nxfit-sync-sdk", targets: ["nxfit_sync_sdk"])
     ],
     dependencies: [
-        .package(url: "https://github.com/NeoEx-Developer/NxFit-SDK-for-iOS", from: "1.0.0"),
+        .package(url: "https://github.com/NeoEx-Developer/NxFit-SDK-for-iOS", from: "1.1.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
 
     ],

@@ -5,7 +5,7 @@ import 'package:nxfit_sdk/core.dart';
 import 'package:nxfit_sdk/models.dart';
 import 'nxfit/exceptions/unavailable_integration_exception.dart';
 import 'nxfit/exceptions/unsupported_integration_exception.dart';
-import 'nxfit_sync_sdk_platform_interface.dart';
+import 'nxfit_sync_sdk_platform.dart';
 
 /// Main interface for the NxFit Sync SDK.
 ///
@@ -66,6 +66,7 @@ class NxfitSyncSdk extends LocalIntegrationClient {
   ) async {
     final sdk = NxfitSyncSdk._(configProvider, authProvider);
     await NxfitSyncSdkPlatform.instance.init(authProvider, configProvider);
+
     return sdk;
   }
 
