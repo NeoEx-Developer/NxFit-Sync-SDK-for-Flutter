@@ -24,7 +24,7 @@ In your project's `pubspec.yaml` file
 # pubspec.yaml
 
 dependencies:
-  nxfit_sync_sdk: ^0.0.5
+  nxfit_sync_sdk: ^0.0.7
 ```
 
 ## Flutter setup
