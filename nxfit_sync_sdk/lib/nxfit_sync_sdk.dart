@@ -226,7 +226,7 @@ class NxfitSyncSdk extends LocalIntegrationClient {
   /// Triggers the sync operation to upload daily health metrics to the NxFit platform.
   ///
   /// This method triggers the synchronization of daily aggregated health metrics
-  /// (e.g., total steps, calories burned) from the device's health store
+  /// (e.g., total steps, kilocalories burned) from the device's health store
   /// (HealthKit on iOS and Health Connect on Android) to the NxFit platform.
   /// The sync process focuses on daily summaries rather than individual health samples.
   ///
