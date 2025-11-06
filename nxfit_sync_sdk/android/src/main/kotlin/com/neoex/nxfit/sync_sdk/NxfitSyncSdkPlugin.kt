@@ -29,6 +29,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.StringCodec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -45,6 +46,10 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
         private const val HEALTH_CONNECT_IDENTIFIER = "health_connect"
     }
 
+    private val accessTokenFlow = MutableStateFlow<String?>(null)
+    private val coroutineScope = CoroutineScope(Dispatchers.IO)
+    private val logger = NxFitLogger(TAG)
+
     /// The MethodChannel that will the communication between Flutter and native Android
     ///
     /// This local reference serves to register the plugin with the Flutter Engine and unregister it
@@ -54,10 +59,8 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
     private lateinit var readyStateChannel: EventChannel
     private var nxfit: NXFit? = null
     private var nxfitHealthConnect: NXFitHealthConnect? = null
-    private val accessTokenFlow = MutableStateFlow<String?>(null)
     private var activity: Activity? = null
     private var readyStateSink: EventChannel.EventSink? = null
-    private val logger = NxFitLogger(TAG)
 
     private val fragmentActivity: FlutterFragmentActivity
         get() = activity as FlutterFragmentActivity
@@ -80,7 +83,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                 try {
                     when (call.method) {
                         Method.GetIntegrations.id -> {
-                            CoroutineScope(Dispatchers.IO).launch {
+                            coroutineScope.launch {
                                 try {
                                     nxfitHealthConnect?.testHealthConnectAvailability(
                                         { result.success(getIntegrationListWithAvailability(HealthConnectState.Unsupported).toJson()) },
@@ -120,7 +123,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                         }
 
                         Method.PurgeCache.id -> {
-                            CoroutineScope(Dispatchers.IO).launch {
+                            coroutineScope.launch {
                                 try {
                                     nxfitHealthConnect?.purgeLocalHealthConnectData()
                                     result.success("Local cache purged successfully")
@@ -133,7 +136,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                         }
 
                         Method.SyncExerciseSessions.id -> {
-                            CoroutineScope(Dispatchers.IO).launch {
+                            coroutineScope.launch {
                                 try {
                                     nxfitHealthConnect?.runIfAnyPermissionGranted {
                                         logger.d("*** SyncExerciseSessions")
@@ -150,7 +153,7 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                         }
 
                         Method.SyncDailyMetrics.id -> {
-                            CoroutineScope(Dispatchers.IO).launch {
+                            coroutineScope.launch {
                                 try {
                                     nxfitHealthConnect?.runIfAnyPermissionGranted {
                                         logger.d("*** SyncDailyMetrics")
@@ -212,10 +215,10 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
                                         configProvider,
                                         userId = authMessage.userId,
                                         accessTokenFlow
-                                    ).apply {
+                                    ).also {
                                         logger.d("NXFit built successfully.")
 
-                                        nxfitHealthConnect = NXFitHealthConnect.build(this).apply {
+                                        nxfitHealthConnect = NXFitHealthConnect.build(it).apply {
                                             logger.d("NXFitHealthConnect built successfully.")
 
                                             testHealthConnectAvailability(
@@ -277,26 +280,32 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
             }
 
             permissionRequestLauncher?.launch(NXFitHealthConnect.allRequiredPermissions)
-            HealthConnectConnectionStateTracker(applicationContext).connect()
+
+            coroutineScope.launch {
+                nxfit?.integrationsManager?.connect(integrationIdentifier)
+            }
         }
     }
 
     private fun disconnect(integrationIdentifier: String) {
         if (integrationIdentifier != HEALTH_CONNECT_IDENTIFIER) throw InvalidIntegrationException(integrationIdentifier)
 
-        HealthConnectConnectionStateTracker(applicationContext).disconnect()
+        coroutineScope.launch {
+            nxfit?.integrationsManager?.disconnect(integrationIdentifier)
+        }
     }
 
     private fun getIntegrationListWithAvailability(availability: HealthConnectState) : LocalIntegrationList {
         return LocalIntegrationList(listOf(LocalIntegration(
             identifier = HEALTH_CONNECT_IDENTIFIER,
-            isConnected = HealthConnectConnectionStateTracker(applicationContext).isConnected,
+            isConnected = nxfitHealthConnect?.isConnected ?: false,
             availability = availability.id
         )));
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methodChannel.setMethodCallHandler(null)
+        coroutineScope.cancel("Detaching from Flutter engine, canceling coroutine jobs")
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -305,6 +314,10 @@ class NxfitSyncSdkPlugin : FlutterPlugin, ActivityAware {
         val contract = PermissionController.createRequestPermissionResultContract()
 
         permissionRequestLauncher = fragmentActivity.registerForActivityResult(contract) { grantedPermissions: Set<String> ->
+            // TODO: Is this required?
+
+            // logger.d(">>> Permission request result: $grantedPermissions")
+
             if (
                 grantedPermissions.contains(HealthPermission.getReadPermission(StepsRecord::class))
             ) {

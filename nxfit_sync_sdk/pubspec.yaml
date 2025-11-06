@@ -1,5 +1,5 @@
 name: nxfit_sync_sdk
-version: 0.0.7
+version: 0.0.8
 description: >
   Seamlessly sync health data from iOS HealthKit and Android Health Connect to the NxFit platform.
 homepage: https://www.neoex.io/
