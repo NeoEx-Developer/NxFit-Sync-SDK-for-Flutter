@@ -1,3 +1,6 @@
+## 0.0.9
+- Upgraded nxfit_sdk reference to 0.3.1 which fixes an issue where the list of integrations was not being properly updated.
+
 ## 0.0.8
 - BREAKING: Health Connect permissions are no longer automatically merged into the AndroidManifest.xml file of the consuming app. This means that apps that make use of Health Connect must delcare all the permissions that pertain to their app. This include requesting for background processing if using a background worker or service.
 

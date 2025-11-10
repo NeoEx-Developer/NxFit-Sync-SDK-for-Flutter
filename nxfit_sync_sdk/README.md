@@ -57,7 +57,7 @@ _subs.add(_nxFitManagers.integrationsManager.integrations.listen((integrations) 
     });
 }));
 
-// Connect to an integration in the list, if remote then the URL will be lauched.
+// Connect to an integration in the list, if remote then the URL will be launched.
 Future<void> connect(IntegrationModel integration) async {
     await _nxFitManagers.integrationsManager.connect(integration.identifier,  (url) async {
         launchUrl(url);
@@ -81,12 +81,63 @@ Future<void> disconnect(IntegrationModel integration) async {
 
 For now the Android component of the plugin provides access only to Google Health Connect.
 
+### AndroidManifest.xml
+
+Health Connect permissions must be declared in the `AndroidManifest.xml` file, failing to do so will prevent the permissions request activity from being launched. You should only
+declare the permissions you require as each one of them will need justification on Google Play when you submit the app for review. Note that only *READ* permissions are required
+here as we do not support writing data to Health Connect. 
+
+The `READ_HEALTH_DATA_IN_BACKGROUND` permission is only required if you intend to read Health Connect data in the background, such as in a background service or worker.
+
+The `READ_EXERCISE` permission is only required if you want to read exercise data.
+
+Note that currenly location records are not supported due to their peculiar permission requirements.
+
+The following is a list of all the permissions associated with the Health Connect record types supported by the plugin. Pick and choose the ones you require and copy them into
+your `AndroidManifest.xml` file.
+
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_WATER_MASS" />
+    <uses-permission android:name="android.permission.health.READ_BONE_MASS" />
+    <uses-permission android:name="android.permission.health.READ_CYCLING_PEDALING_CADENCE" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="android.permission.health.READ_HEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_HYDRATION" />
+    <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.READ_POWER" />
+    <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_SPEED" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_STEPS_CADENCE" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_WHEELCHAIR_PUSHES" />
+</manifest>
+```
+
 ### FlutterFragmentActivity
 Ensure that the `MainActivity` extends `FlutterFragmentActivity` to support permissions requests required by Health Connect. Typically when creating 
 a Flutter app with Android embedding v2, the MainActivity extends `FlutterActivity` by default. Change it to extend `FlutterFragmentActivity` instead.
 
 ``` kotlin
-        // YouApp/android/app/src/main/kotlin/com/yourcompany/yourapp/MainActivity.kt
+        // YourApp/android/app/src/main/kotlin/com/yourcompany/yourapp/MainActivity.kt
         import io.flutter.embedding.android.FlutterFragmentActivity
 
         class MainActivity : FlutterFragmentActivity()
@@ -203,46 +254,14 @@ not be asked again unless the app is uninstalled or the user revokes permissions
 "Don't ask again" option when the permission dialog is shown. In this case, your app will not be able to request permissions again and the user must manually enable permissions
 through system settings. On newer versions of Android, if a user denies permissions multiple times, the system may automatically prevent further permission requests.
 
-There is no need to declare the health Connect permissions in your app's manifest because they will be automatically merged at build time from the **NXFit Health Connect SDK**'s
-manifest (See: [com.neoex.nxfit-sdk-healthconnect](https://github.com/NeoEx-Developer/NXFit-SDK-for-Android/packages/2653461)). Also, a query will also be merged into your app's
-manifest to allow querying the state of Health Connect on the device. An additional query is added to allow looking up apps that have reported data to Health Connect based on
-their package ID. Here is what will be merged into your app's manifest:
+As mentioned above, the Health Connect record and background read permissions must be declared in your `AndroidManifest.xml` for the Android project. On top of that, a query must be declared in the
+`AndroidManifest.xml` to allow the Sync SDK to check if Health Connect is available. However, this is automatically merged into your app's manifest to allow querying the state
+of Health Connect on the device. An additional query is merged to allow looking up apps that have reported data to Health Connect based on their package ID. Here is what will be
+merged into your app's manifest (You do not need to add them):
 
 ``` xml
     // Merge'd from the NXFit Health Connect SDK's AndroidManifest.xml.
     <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-        <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
-    
-        <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
-        <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
-        <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
-        <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
-        <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE" />
-        <uses-permission android:name="android.permission.health.READ_BODY_WATER_MASS" />
-        <uses-permission android:name="android.permission.health.READ_BONE_MASS" />
-        <uses-permission android:name="android.permission.health.READ_CYCLING_PEDALING_CADENCE" />
-        <uses-permission android:name="android.permission.health.READ_DISTANCE" />
-        <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED" />
-        <uses-permission android:name="android.permission.health.READ_EXERCISE" />
-        <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED" />
-        <uses-permission android:name="android.permission.health.READ_HEART_RATE" /> 
-        <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
-        <uses-permission android:name="android.permission.health.READ_HEIGHT" />
-        <uses-permission android:name="android.permission.health.READ_HYDRATION" />
-        <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
-        <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
-        <uses-permission android:name="android.permission.health.READ_POWER" />
-        <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
-        <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
-        <uses-permission android:name="android.permission.health.READ_SLEEP" />
-        <uses-permission android:name="android.permission.health.READ_SPEED" />
-        <uses-permission android:name="android.permission.health.READ_STEPS" />
-        <uses-permission android:name="android.permission.health.READ_STEPS_CADENCE" />
-        <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
-        <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
-        <uses-permission android:name="android.permission.health.READ_WEIGHT" />
-        <uses-permission android:name="android.permission.health.READ_WHEELCHAIR_PUSHES" />
-        
         <queries>
             <!-- Check if Health Connect is installed -->
             <package android:name="com.google.android.apps.healthdata" />
@@ -255,25 +274,9 @@ their package ID. Here is what will be merged into your app's manifest:
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent>
         </queries>
-            
+
         .....
    
-    </manifest>
-```
-
-Excluding unneeded permissions is possible. To do this, you'll need to add the `tools` namespace to your manifest's root `<manifest>` tag. Then, for each permission you want to
-exclude, add a `<uses-permission>` tag with the `tools:node="remove"` attribute. Example:
-
-``` xml
-    // YouApp/android/app/src/main/AndroidManifest.xml
-    <manifest
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-    
-        <uses-permission android:name="android.permission.health.READ_XYZ" tools:node="remove" />
-
-    .....
-    
     </manifest>
 ```
 
