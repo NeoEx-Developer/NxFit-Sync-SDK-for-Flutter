@@ -1,3 +1,6 @@
+## 0.0.10
+- Added support for sleep samples on iOS (via the native iOS SDK).
+
 ## 0.0.9
 - Upgraded nxfit_sdk reference to 0.3.1 which fixes an issue where the list of integrations was not being properly updated.
 

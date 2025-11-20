@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/NeoEx-Developer/NxFit-SDK-for-iOS",
       "state" : {
-        "revision" : "48882d6821d371c466d2dab443b6eee1c1c03a54",
-        "version" : "1.1.0"
+        "revision" : "330e045af28fe176e6d295fedb6097931d94dec4",
+        "version" : "1.5.0"
       }
     },
     {
