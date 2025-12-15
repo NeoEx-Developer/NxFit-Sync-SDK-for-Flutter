@@ -1,8 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nxfit_sdk/clients.dart';
 import 'package:nxfit_sdk/models.dart';
 import 'package:nxfit_sync_sdk/nxfit_sync_sdk.dart';
-import 'package:nxfit_sync_sdk/nxfit_sync_sdk_platform_interface.dart';
+import 'package:nxfit_sync_sdk/nxfit_sync_sdk_platform.dart';
 import 'package:nxfit_sync_sdk/nxfit_sync_sdk_impl.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:nxfit_sdk/core.dart';
@@ -100,6 +99,9 @@ class MockConfigProvider implements ConfigurationProvider {
 
   @override
   int get connectTimeoutSeconds => 30;
+
+  @override
+  LogLevel get minLogLevel => LogLevel.info;
 
   @override
   HttpLoggerLevel get httpLoggerLevel => HttpLoggerLevel.none;

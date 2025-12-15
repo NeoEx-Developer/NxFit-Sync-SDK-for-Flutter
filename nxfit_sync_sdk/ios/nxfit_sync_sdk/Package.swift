@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 5.10
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -12,7 +12,7 @@ let package = Package(
         .library(name: "nxfit-sync-sdk", targets: ["nxfit_sync_sdk"])
     ],
     dependencies: [
-        .package(url: "https://github.com/NeoEx-Developer/NxFit-SDK-for-iOS", from: "1.5.0"),
+        .package(url: "https://github.com/NeoEx-Developer/NxFit-SDK-for-iOS", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
     ],
     targets: [

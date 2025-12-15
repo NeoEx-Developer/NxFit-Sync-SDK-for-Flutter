@@ -3,7 +3,7 @@ import UIKit
 import NXFitAuth
 import NXFitConfig
 import NXFitSync
-import Combine
+import AsyncExtensions
 import Logging
 
 public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
@@ -13,7 +13,6 @@ public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     private let authProvider: AuthProviding
     private var configProvider: ConfigurationProviding?
     private var syncSdk: NXFitSync?
-    private var authStatusSubscription: AnyCancellable? = nil
     private let appleIntegrationIdentifier = "apple"
     private let flutterResultCodeError = "ERROR"
     private let flutterResultCodeInvalidArgument = "INVALID_ARGUMENT"
@@ -29,34 +28,57 @@ public class NxfitSyncSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
 
     public init(with registrar: FlutterPluginRegistrar) {
-        self.logger = Logger(label: "com.neoex.nxfit.sync.bridge.NxfitSyncSdkPlugin")
+        let logger = Logger(label: "com.neoex.nxfit.sync.bridge.NxfitSyncSdkPlugin")
+        self.logger = logger
         self.logger.debug("plugin init")
         
         self.messageChannel = FlutterBasicMessageChannel(name: "com.neoex.sdk/authProvider", binaryMessenger:  registrar.messenger(), codec: FlutterJSONMessageCodec())
-        self.authProvider = AuthProviderImpl(self.messageChannel)
+        
+        let authProvider = AuthProviderImpl(self.messageChannel)
+        self.authProvider = authProvider
         
         super.init();
         
-        self.authStatusSubscription = self.authProvider.authState
-            .receive(on: RunLoop.main)
-            .sink { [weak self] (state) in
-                guard let self = self else {
-                    return
-                }
-                
-                self.logger.debug("auth state \(state.value)")
-                
-                if case let AuthState.authenticated(_) = state, let configProvider = self.configProvider {
-                    if self.syncSdk == nil {
-                        self.syncSdk = NXFitSyncFactory.build(configProvider, self.authProvider)
-                        self.readyEventSink?(true)
+        Task {
+            await setupSubscription(logger, authProvider.authState)
+        }
+    }
+    
+    private func setupSubscription(_ logger: Logger, _ auth: AnyAsyncSequence<AuthState>) -> Void {
+        Task { [weak self] in
+            //We cannot check for self here as it would create a strong reference within
+            //the for loop, causing self not to be released until the the sequence finishes.
+            //Given we have no control over the sequence, it's best to assume it won't finish
+            //before we need to clean up.
+            
+            do {
+                for try await state in auth {
+                    //As the task is detached, using a weak self reference, we should check
+                    //that the reference to self still exists when executing each iteration.
+                    guard let self = self else { return }
+                    
+                    if case let AuthState.authenticated(_) = state, let configProvider = self.configProvider {
+                        if self.syncSdk == nil {
+                            self.syncSdk = NXFitSyncFactory.build(configProvider, self.authProvider)
+                            
+                            await MainActor.run {
+                                self.readyEventSink?(true)
+                            }
+                        }
+                    }
+                    else {
+                        self.syncSdk = nil
+                        
+                        await MainActor.run {
+                            self.readyEventSink?(false)
+                        }
                     }
                 }
-                else {
-                    self.syncSdk = nil
-                    self.readyEventSink?(false)
-                }
             }
+            catch {
+                logger.error("Failed to retrieve auth value from AuthProviding/authState; error: \(error.localizedDescription)")
+            }
+        }
     }
     
     public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {

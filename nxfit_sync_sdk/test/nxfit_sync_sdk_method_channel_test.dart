@@ -25,6 +25,9 @@ class MockConfigProvider implements ConfigurationProvider {
   int get connectTimeoutSeconds => 30;
 
   @override
+  LogLevel get minLogLevel => LogLevel.info;
+
+  @override
   HttpLoggerLevel get httpLoggerLevel => HttpLoggerLevel.none;
 }
 
